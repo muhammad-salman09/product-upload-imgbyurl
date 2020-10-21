@@ -1,6 +1,7 @@
 <?php
 // Include wp-load.php
 require_once('../wp-load.php');
+require_once ABSPATH . '/wp-admin/includes/post.php';
 set_time_limit(111110);
 ini_set('max_execution_time', 0); //0=NOLIMIT
 error_reporting(1);
@@ -12,18 +13,27 @@ header('Content-Type: text/html; charset=utf-8');
 // Include image.php
 require_once(ABSPATH . 'wp-admin/includes/image.php');
 
-$csv_path 		= "CSV/upload.csv";
+// $csv_path 		= "CSV/upload.csv";
+global $wpdb;
+$files = glob("CSV/*.csv");
 $sheet_data = array();
-if (($handle = fopen($csv_path, "r")) !== FALSE) { // reading sheet
-    while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-        $sheet_data[] = $data;
-    }
-   
-    fclose($handle);
+foreach ($files as $file) {
+	if (($handle = fopen($file, "r")) !== FALSE) { // reading sheet
+		 echo "<b>Filename: " . basename($file) . "</b><br><br>";
+	    while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+	        $sheet_data[] = $data;
+	    }
+	   
+	    fclose($handle);
+	}else{
+		echo "Could not open file: " . $file;
+	}
 }
-/*echo "<pre>";
+
+
+echo "<pre>";
 print_r($sheet_data);
-exit;*/
+exit;
 $headers = array();
 $upload_dir = wp_upload_dir();
 foreach ($sheet_data as $key => $value) {
@@ -42,22 +52,22 @@ foreach ($sheet_data as $key => $value) {
 			$pro_shop_selec			= $value[8];
 			$pro_stock 				= $value[9];
 			$pro_low_stock 			= $value[10];
-			$pro_cust_type			= $value[17];
-			$pro_max_qty			= $value[18];
-			$pro_care_tips			= $value[19];
-			$pro_image_credit		= $value[20];
-			$pro_reg_price			= $value[21];
-			$pro_sale_price			= $value[22];
-			$pro_cat				= $value[23];
-			$pro_att1_name			= $value[24];
-			$pro_att1_value			= $value[25];
-			$pro_att2_name			= $value[26];
-			$pro_att2_value			= $value[27];
-			$pro_tag				= $value[30];
-			$pro_types				= $value[31];
-			$pro_seo_keyword		= $value[32];
-			$pro_seo_title			= $value[33];
-			$pro_seo_meta_desc		= $value[34];
+			$pro_cust_type			= $value[18];
+			$pro_max_qty			= $value[19];
+			$pro_care_tips			= $value[20];
+			$pro_image_credit		= $value[21];
+			$pro_reg_price			= $value[22];
+			$pro_sale_price			= $value[23];
+			$pro_cat				= $value[24];
+			$pro_att1_name			= $value[25];
+			$pro_att1_value			= $value[26];
+			$pro_att2_name			= $value[27];
+			$pro_att2_value			= $value[28];
+			$pro_tag				= $value[31];
+			$pro_types				= $value[32];
+			$pro_seo_keyword		= $value[33];
+			$pro_seo_title			= $value[34];
+			$pro_seo_meta_desc		= $value[35];
 			
 
 			// Add Shops
@@ -252,6 +262,8 @@ foreach ($sheet_data as $key => $value) {
 					if ($pro_stock > 0) {
 						$product->set_stock_status("instock");
 					}
+
+
 					$product->set_description($pro_desc); // set product descriptoin
 					$product->set_short_description($pro_short_desc); // set product short description
 					$product->set_regular_price($pro_reg_price); // set product price
@@ -269,7 +281,7 @@ foreach ($sheet_data as $key => $value) {
 					$product->set_manage_stock(true); // true or false
 					
 					update_post_meta( $product_id, '_stock', $pro_stock ); //set stock
-					
+					update_post_meta( $product_id,'_low_stock_amount', $pro_low_stock); // set care_tips
 					update_post_meta( $product_id,'_sale_price', $pro_sale_price); // set sale price
 					$product->save();
 					$product_id_main = $product_id;
@@ -309,6 +321,7 @@ foreach ($sheet_data as $key => $value) {
 					$product_image	= $value[12];
 					$attach_id = create_product_images($product_image,$path,$product_id_main,$upload_dir);
 					if($attach_id){
+
 						update_post_meta( $product_id_main,'second_image',$attach_id );
 					}
 				}
@@ -341,6 +354,13 @@ foreach ($sheet_data as $key => $value) {
 						$attach_ids[] = $attach_id;
 					}
 				}
+				if(isset($value[17]) && !empty($value[17])) {
+					$product_image	= $value[17];
+					$attach_id = create_product_images($product_image,$path,$product_id_main,$upload_dir);
+					if($attach_id){
+						$attach_ids[] = $attach_id;
+					}
+				}
 				if(!empty($attach_ids)){
 					update_post_meta( $product_id_main,'_product_image_gallery',implode(',',$attach_ids));
 				}
@@ -357,19 +377,9 @@ function create_product_images($product_image,$path,$product_id,$upload_dir){
 		// echo $image_url;echo '<br>';
 		$filename      = basename($image_url);
 		$title         = preg_replace('/\.[^.]+$/', '', $filename);
-		$attachment_args = array(
-	        'posts_per_page' => -1,
-	        'post_type'      => 'attachment',
-	        'name'           => $title
-	    );
-	    $attachment_check = new Wp_Query($attachment_args);
-		if($attachment_check->have_posts() ) {
-			while($attachment_check->have_posts() ) {
-                $attachment_check->the_post();
-                $attachment_id = get_the_ID();
-                echo 'Attachment <strong>'. $filename .'</strong> already there...<br>';
-                return $attachment_id;
-            }          
+	
+		if(post_exists($title,'','','attachment')){
+            return post_exists($title,'','','attachment');    
         }else{
 			$upload_file = wp_upload_bits($filename, null, file_get_contents($image_url));
 			if(!$upload_file['error']) {
@@ -381,9 +391,6 @@ function create_product_images($product_image,$path,$product_id,$upload_dir){
 					'post_content' 		=> '',
 					'post_status' 		=> 'inherit'
 				);
-				
-	            $attachment_check = new Wp_Query( $attachment_args );
-	            
 				$attachment_id = wp_insert_attachment( $attachment, $upload_file['file'], $product_id );
 				if (!is_wp_error($attachment_id)) {
 					$attachment_data = wp_generate_attachment_metadata( $attachment_id, $upload_file['file'] );
